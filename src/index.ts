@@ -41,4 +41,19 @@ app.patch('/files/:id', zValidator('json', updateFileSchema), async (c) => {
   return c.json({ success: true });
 });
 
+const newFileSchema = z.object({
+  filename: z.string(),
+});
+
+app.post('/files', zValidator('json', newFileSchema), async (c) => {
+  const body = c.req.valid('json');
+  const { filename } = body;
+  await db.insert(schema.files).values({
+    filename,
+    content: '',
+  });
+
+  return c.json({ success: true });
+});
+
 export default app;
