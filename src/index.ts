@@ -16,7 +16,9 @@ app.get('/', (c) => {
 app.get('/files', async (c) => {
   const files = await db.query.files.findMany({
     orderBy: asc(schema.files.created_at),
+    where: eq(schema.files.is_deleted, false),
   });
+
   return c.json(files);
 });
 
@@ -43,6 +45,21 @@ app.patch('/files/:id', zValidator('json', updateFileSchema), async (c) => {
 
 const newFileSchema = z.object({
   filename: z.string(),
+});
+
+app.delete('/files/:id', async (c) => {
+  const idString = c.req.param('id');
+  const id = Number(idString);
+  if (isNaN(id)) {
+    return c.json({ error: 'Invalid id' }, 400);
+  }
+
+  await db
+    .update(schema.files)
+    .set({ is_deleted: true })
+    .where(eq(schema.files.id, id));
+
+  return c.json({ success: true });
 });
 
 app.post('/files', zValidator('json', newFileSchema), async (c) => {
