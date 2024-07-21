@@ -48,12 +48,15 @@ const newFileSchema = z.object({
 app.post('/files', zValidator('json', newFileSchema), async (c) => {
   const body = c.req.valid('json');
   const { filename } = body;
-  await db.insert(schema.files).values({
-    filename,
-    content: '',
-  });
+  const [file] = await db
+    .insert(schema.files)
+    .values({
+      filename,
+      content: '',
+    })
+    .returning();
 
-  return c.json({ success: true });
+  return c.json({ success: true, file });
 });
 
 export default app;
