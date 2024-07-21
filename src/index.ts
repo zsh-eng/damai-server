@@ -21,7 +21,8 @@ app.get('/files', async (c) => {
 });
 
 const updateFileSchema = z.object({
-  content: z.string(),
+  content: z.string().optional(),
+  filename: z.string().optional(),
 });
 
 app.patch('/files/:id', zValidator('json', updateFileSchema), async (c) => {
@@ -34,7 +35,7 @@ app.patch('/files/:id', zValidator('json', updateFileSchema), async (c) => {
   const body = c.req.valid('json');
   await db
     .update(schema.files)
-    .set({ content: body.content })
+    .set({ content: body.content, filename: body.filename })
     .where(eq(schema.files.id, id));
 
   return c.json({ success: true });
