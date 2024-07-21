@@ -15,7 +15,7 @@ app.get('/', (c) => {
 
 app.get('/files', async (c) => {
   const files = await db.query.files.findMany({
-    orderBy: asc(schema.files.filename),
+    orderBy: asc(schema.files.created_at),
   });
   return c.json(files);
 });
