@@ -4,7 +4,7 @@ import { cors } from 'hono/cors';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import * as schema from '@/db/schema';
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 
 const app = new Hono();
 app.use(cors());
@@ -15,7 +15,7 @@ app.get('/', (c) => {
 
 app.get('/files', async (c) => {
   const files = await db.query.files.findMany({
-    orderBy: asc(schema.files.created_at),
+    orderBy: [asc(schema.files.created_at), asc(schema.files.id)],
     where: eq(schema.files.is_deleted, false),
   });
 
@@ -75,5 +75,29 @@ app.post('/files', zValidator('json', newFileSchema), async (c) => {
 
   return c.json({ success: true, file });
 });
+
+app.get(
+  'search',
+  zValidator(
+    'query',
+    z.object({
+      query: z.string(),
+    })
+  ),
+  async (c) => {
+    const { query } = c.req.valid('query');
+    const files = await db
+      .select({
+        id: schema.files.id,
+        content: schema.files.content,
+        rank: sql`ts_rank_cd(to_tsvector(${schema.files.content}), to_tsquery(${query})) AS rank`,
+      })
+      .from(schema.files)
+      .orderBy(desc(sql`rank`))
+      .where(sql`to_tsvector(${schema.files.content}) @@ to_tsquery(${query})`);
+
+    return c.json(files);
+  }
+);
 
 export default app;
