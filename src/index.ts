@@ -81,22 +81,38 @@ app.get(
   zValidator(
     'query',
     z.object({
-      query: z.string(),
+      q: z.string(),
     })
   ),
   async (c) => {
-    const { query } = c.req.valid('query');
-    const files = await db
+    const { q } = c.req.valid('query');
+    const search = db
       .select({
         id: schema.files.id,
         content: schema.files.content,
-        rank: sql`ts_rank_cd(to_tsvector(${schema.files.content}), to_tsquery(${query})) AS rank`,
+        filename: schema.files.filename,
+        query: sql`websearch_to_tsquery(${q}) AS query`,
+        rank: sql`ts_rank_cd(to_tsvector(${schema.files.content}), websearch_to_tsquery(${q})) AS rank`,
       })
       .from(schema.files)
       .orderBy(desc(sql`rank`))
-      .where(sql`to_tsvector(${schema.files.content}) @@ to_tsquery(${query})`);
+      .where(sql`to_tsvector(${schema.files.content}) @@ websearch_to_tsquery(${q})`)
+      .limit(10)
+      .as('search');
 
-    return c.json(files);
+    const files = await db
+      .select({
+        id: search.id,
+        filename: search.filename,
+        rank: sql<number>`search.rank`,
+        headline: sql<string>`ts_headline(search.content, search.query) AS headline`,
+      })
+      .from(search);
+
+    return c.json({
+      success: true,
+      files
+    });
   }
 );
 
