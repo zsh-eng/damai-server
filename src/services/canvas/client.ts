@@ -1,3 +1,11 @@
+import {
+    CanvasCourse,
+    CanvasFile,
+    CanvasFolder,
+    courseSchema,
+    fileSchema,
+    folderSchema,
+} from "@/services/canvas/schema";
 import { parseLinkHeaders } from "@/services/canvas/utils";
 
 /**
@@ -101,7 +109,9 @@ export class CanvasClient {
         url = first;
         let pageNumber = 1;
         while (url) {
-            console.log(`Making paginated request to page ${[pageNumber]}: ${url}`);
+            console.log(
+                `Making paginated request to page ${[pageNumber]}: ${url}`
+            );
             const response = await fetch(url, {
                 ...options,
                 headers: {
@@ -121,7 +131,7 @@ export class CanvasClient {
 
             const data = await response.json();
             console.log(
-                `Paginated request to ${url} successful. Adding data from page ${pageNumber} to result`
+                `Paginated request to ${url} successful. Adding ${data.length} data from page ${pageNumber} to result`
             );
             result.push(...data);
 
@@ -136,7 +146,7 @@ export class CanvasClient {
                 console.log(
                     `No next link found in response from ${url}, stopping pagination`
                 );
-                return result
+                return result;
             }
 
             const next = new URL(links.next);
@@ -146,5 +156,58 @@ export class CanvasClient {
         }
 
         return result;
+    }
+
+    /**
+     *
+     * @returns the list of active courses for the user
+     */
+    async getAllCourses(): Promise<CanvasCourse[]> {
+        const res = await this.paginatedRequest<unknown>("/courses");
+        const courses = res
+            .filter(
+                (course): course is CanvasCourse =>
+                    courseSchema.safeParse(course).success
+            )
+            .map((course) => courseSchema.parse(course));
+
+        return courses;
+    }
+
+    /**
+     * Returns the list of folders for a course.
+     * @param id the course ID
+     * @returns the list of folders for the course
+     */
+    async getFoldersForCourse(id: number): Promise<CanvasFolder[]> {
+        const res = await this.paginatedRequest<unknown>(
+            `/courses/${id}/folders`
+        );
+        const folders = res
+            .filter(
+                (folder): folder is CanvasFolder =>
+                    folderSchema.safeParse(folder).success
+            )
+            .map((folder) => folderSchema.parse(folder));
+
+        return folders;
+    }
+
+    /**
+     * Returns the list of files for a folder.
+     * @param id the folder ID
+     * @returns the list of files for the folder
+     */
+    async getFilesForFolder(id: number): Promise<CanvasFile[]> {
+        const res = await this.paginatedRequest<unknown>(
+            `/folders/${id}/files`
+        );
+        const files = res
+            .filter(
+                (file): file is CanvasFile => fileSchema.safeParse(file).success
+            )
+            .map((file) => fileSchema.parse(file));
+
+        return files;
     }
 }
