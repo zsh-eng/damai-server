@@ -8,6 +8,14 @@ import {
 } from "@/services/canvas/schema";
 import { parseLinkHeaders } from "@/services/canvas/utils";
 
+export class ForbiddenCanvasClientError extends Error {
+    constructor() {
+        super("UnauthorizedCanvasClientError");
+    }
+}
+const FORBIDDEN_STATUS = 403;
+
+
 /**
  * A client for accessing the Canvas API.
  */
@@ -85,6 +93,10 @@ export class CanvasClient {
                 ...options.headers,
             },
         });
+
+        if (response.status === FORBIDDEN_STATUS) {
+            throw new ForbiddenCanvasClientError();
+        }
 
         const linkHeader = response.headers.get("Link");
         if (!linkHeader) {
