@@ -23,10 +23,10 @@ async function downloadFile(url: string, filepath: string) {
  */
 export async function downloadFilesForCourse(
     course: CanvasCourse,
-    basePath: string
+    basePath: string,
+    client: CanvasClient
 ): Promise<void> {
     console.log("Downloading files for course", course.name);
-    const client = new CanvasClient(process.env.CANVAS_TOKEN!);
     try {
         const folders = await client.getFoldersForCourse(course.id);
 

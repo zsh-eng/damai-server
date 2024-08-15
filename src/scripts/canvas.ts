@@ -8,7 +8,7 @@ async function main() {
     const courses = await client.getAllCourses();
     console.log(courses);
     for (const course of courses) {
-        await downloadFilesForCourse(course, BASE_PATH);
+        await downloadFilesForCourse(course, BASE_PATH, client);
     }
 }
 
