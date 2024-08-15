@@ -36,6 +36,9 @@ export function parseLinkHeaders(linkHeader?: string): Record<string, string> {
  * Returns an adajacency list representing the parent to child relationship of the folders.
  * @param folders a list of Canvas folders
  * @returns an object with the root folder and the adjacency list
+ * 
+ * @deprecated Folders contain the full name of the folder, which is the path to the folder.
+ * This function is no longer needed as the full name can be used to generate the path.
  */
 export function folderArrayToAdjacencyList(folders: CanvasFolder[]): {
     root: CanvasFolder;
@@ -84,4 +87,20 @@ export function folderArrayToAdjacencyList(folders: CanvasFolder[]): {
         root,
         list: adjacencyList,
     };
+}
+
+/**
+ * Generates a folder path from a Canvas folder.
+ *
+ * @param folder the Canvas folder
+ * @param root the root folder to prepend to the path
+ * @returns
+ */
+export function generateFolderPath(folder: CanvasFolder, root = "") {
+    // All canvas files for a folder have the "course files" prefix
+    // We can replace it here with a custom root folder e.g. /src/school/files/CS110S/<full_name>
+    if (root.endsWith("/")) {
+        return folder.full_name.replace("course files/", root);
+    }
+    return folder.full_name.replace("course files", root);
 }
