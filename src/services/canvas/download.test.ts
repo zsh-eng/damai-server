@@ -2,11 +2,13 @@ import { CanvasClient } from "@/services/canvas/client";
 import { downloadFilesForCourse } from "@/services/canvas/download";
 import {
     CanvasCourse,
-    CanvasFolder,
     CanvasFile,
+    CanvasFolder,
 } from "@/services/canvas/schema";
 import { vol } from "memfs";
-import { readFile, access } from "node:fs/promises";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import fs, { access, readFile } from "node:fs/promises";
 import {
     afterAll,
     afterEach,
@@ -17,16 +19,17 @@ import {
     it,
     vi,
 } from "vitest";
-import { setupServer } from "msw/node";
-import { HttpResponse, http } from "msw";
 
 // tell vitest to use fs mock from __mocks__ folder
 // this can be done in a setup file if fs should always be mocked
 vi.mock("node:fs");
 vi.mock("node:fs/promises");
-vi.mock("@/services/canvas/client", () => {
-    const getFolders = vi.fn(() => testFolders);
-    const getFiles = vi.fn(() => []);
+vi.mock("@/services/canvas/client", async (importOriginal) => {
+    const mod = await importOriginal<
+        typeof import("@/services/canvas/client")
+    >();
+    const getFolders = vi.fn(async () => testFolders);
+    const getFiles = vi.fn(async () => []);
     const CanvasClient = vi.fn(() => ({
         getFoldersForCourse: getFolders,
         getFilesForFolder: getFiles,
@@ -34,6 +37,7 @@ vi.mock("@/services/canvas/client", () => {
     // CanvasClient.prototype.getFoldersForCourse = getFolders;
     // CanvasClient.prototype.getFilesForFolder = getFiles;
     return {
+        ...mod,
         CanvasClient,
     };
 });
@@ -279,13 +283,171 @@ describe("downloadFilesForCourse", () => {
             downloadFilesForCourse(mockCourse, "/tmp", mockClient)
         ).resolves.toBe(undefined);
 
-        console.log(vol.toJSON());
-
         for (const file of files1) {
             await expect(
-                readFile(`/tmp/NST2055/Course Notes/${file.display_name}`, "utf8")
+                readFile(
+                    `/tmp/NST2055/Course Notes/${file.display_name}`,
+                    "utf8"
+                )
             ).resolves.toBe(`This is the content of ${file.display_name}`);
         }
+    });
+
+    describe("Metadata file", () => {
+        beforeAll(() => {
+            mockedFiles.mockImplementation(async (id) => {
+                if (testFolders[0].id === id) {
+                    return files1;
+                }
+                return [];
+            });
+        });
+
+        afterAll(() => {
+            mockedFiles.mockImplementation(async () => []);
+        });
+
+        it("should create metadata.json file after", async () => {
+            await expect(
+                downloadFilesForCourse(mockCourse, "/tmp", mockClient)
+            ).resolves.toBe(undefined);
+
+            await expect(access("/tmp/NST2055/metadata.json")).resolves.toBe(
+                undefined
+            );
+            const metadata = JSON.parse(
+                await readFile("/tmp/NST2055/metadata.json", "utf-8")
+            );
+            expect(Object.entries(metadata).length).toBe(files1.length);
+        });
+
+        it("should create new metadata.json file if corrupted", async () => {
+            vol.fromJSON(
+                {
+                    "./NST2055/metadata.json": "corrupted",
+                },
+                // default cwd
+                "/tmp"
+            );
+
+            await expect(
+                downloadFilesForCourse(mockCourse, "/tmp", mockClient)
+            ).resolves.toBe(undefined);
+
+            await expect(access("/tmp/NST2055/metadata.json")).resolves.toBe(
+                undefined
+            );
+            const metadata = JSON.parse(
+                await readFile("/tmp/NST2055/metadata.json", "utf-8")
+            );
+            expect(Object.entries(metadata).length).toBe(files1.length);
+        });
+
+        it("should not download file if already up to date", async () => {
+            const metadata = Object.fromEntries(
+                files1.map((file) => [file.id, file])
+            );
+            vol.fromJSON(
+                {
+                    "./NST2055/metadata.json": JSON.stringify(metadata),
+                },
+                // default cwd
+                "/tmp"
+            );
+
+            const spy = vi.spyOn(global, "fetch");
+            await expect(
+                downloadFilesForCourse(mockCourse, "/tmp", mockClient)
+            ).resolves.toBe(undefined);
+            expect(spy).toHaveBeenCalledTimes(0);
+        });
+
+        it("should download file again if not exist", async () => {
+            const metadata = Object.fromEntries(
+                files1.map((file) => [file.id, file]).slice(1)
+            );
+            vol.fromJSON(
+                {
+                    "./NST2055/metadata.json": JSON.stringify(metadata),
+                },
+                // default cwd
+                "/tmp"
+            );
+
+            const spy = vi.spyOn(global, "fetch");
+            await expect(
+                downloadFilesForCourse(mockCourse, "/tmp", mockClient)
+            ).resolves.toBe(undefined);
+            expect(spy).toHaveBeenCalledTimes(1);
+        });
+
+        it("should download file again if not up-to-date", async () => {
+            const oldDate = "2000-01-01T05:13:26Z";
+            const firstFile = {
+                ...files1[0],
+            };
+            firstFile.updated_at = oldDate;
+            firstFile.created_at = oldDate;
+
+            const metadata = Object.fromEntries(
+                [firstFile, ...files1.slice(1)].map((file) => [file.id, file])
+            );
+
+            const firstFilePath = `/tmp/NST2055/Course Notes/${firstFile.display_name}`;
+            vol.fromJSON(
+                {
+                    "./NST2055/metadata.json": JSON.stringify(metadata),
+                    [firstFilePath]: `This is the old content`,
+                },
+                // default cwd
+                "/tmp"
+            );
+
+            const spy = vi.spyOn(global, "fetch");
+            await expect(
+                downloadFilesForCourse(mockCourse, "/tmp", mockClient)
+            ).resolves.toBe(undefined);
+            expect(spy).toHaveBeenCalledTimes(1);
+            const newMetadata = JSON.parse(
+                await readFile("/tmp/NST2055/metadata.json", "utf-8")
+            );
+            expect(newMetadata[firstFile.id.toString()].updated_at).not.toBe(
+                oldDate
+            );
+            expect(newMetadata[firstFile.id.toString()].updated_at).toBe(
+                files1[0].updated_at
+            );
+
+            const firstFileNewPath = firstFilePath + "_v2";
+            expect(await readFile(firstFileNewPath, "utf-8")).toBe(
+                `This is the content of ${firstFile.display_name}`
+            );
+        });
+
+        it("should throw error if hit retry limit", async () => {
+            const limit = 10;
+            const fileNames = Array.from({ length: limit }, (_, i) => {
+                if (i === 0) {
+                    return files1[0].display_name;
+                }
+                return `${files1[0].display_name}_v${i + 1}`;
+            });
+            const volJson = Object.fromEntries(
+                fileNames.map((name) => [`./NST2055/Course Notes/${name}`, ""])
+            );
+
+            vol.fromJSON(
+                volJson,
+                // default cwd
+                "/tmp"
+            );
+
+            const spy = vi.spyOn(global, "fetch");
+            await expect(
+                downloadFilesForCourse(mockCourse, "/tmp", mockClient)
+            ).rejects.toThrowError(/Failed to write file after 10 retries/);
+            expect(spy).toHaveBeenCalledTimes(1); // only single fetch
+        });
     });
 
     // TODO: check if nested directory structures are handled correctly
