@@ -1,3 +1,4 @@
+import { ENDPOINTS } from "@/services/canvas/constants";
 import {
     CanvasCourse,
     CanvasFile,
@@ -14,7 +15,6 @@ export class ForbiddenCanvasClientError extends Error {
     }
 }
 const FORBIDDEN_STATUS = 403;
-
 
 /**
  * A client for accessing the Canvas API.
@@ -175,7 +175,7 @@ export class CanvasClient {
      * @returns the list of active courses for the user
      */
     async getAllCourses(): Promise<CanvasCourse[]> {
-        const res = await this.paginatedRequest<unknown>("/courses");
+        const res = await this.paginatedRequest<unknown>(ENDPOINTS.ALL_COURSES);
         const courses = res
             .filter(
                 (course): course is CanvasCourse =>
@@ -193,7 +193,7 @@ export class CanvasClient {
      */
     async getFoldersForCourse(id: number): Promise<CanvasFolder[]> {
         const res = await this.paginatedRequest<unknown>(
-            `/courses/${id}/folders`
+            ENDPOINTS.COURSE_FOLDER(id)
         );
         const folders = res
             .filter(
@@ -212,7 +212,7 @@ export class CanvasClient {
      */
     async getFilesForFolder(id: number): Promise<CanvasFile[]> {
         const res = await this.paginatedRequest<unknown>(
-            `/folders/${id}/files`
+            ENDPOINTS.FOLDER_FILES(id)
         );
         const files = res
             .filter(
