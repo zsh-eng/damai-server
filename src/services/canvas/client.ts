@@ -1,3 +1,4 @@
+import { logger } from "@/log";
 import { ENDPOINTS } from "@/services/canvas/constants";
 import {
     CanvasCourse,
@@ -47,7 +48,7 @@ export class CanvasClient {
         options: RequestInit = {}
     ): Promise<T> {
         const url = this.makeUrl(path);
-        console.log(`Making request to ${url}`);
+        logger.info(`Making request to ${url}`);
         const response = await fetch(url, {
             ...options,
             headers: {
@@ -56,15 +57,15 @@ export class CanvasClient {
             },
         });
 
-        console.log(`Request to ${url} completed`);
+        logger.info(`Request to ${url} completed`);
         if (!response.ok) {
-            console.log(
+            logger.info(
                 `Request to ${url} failed with status ${response.status}`
             );
             throw new Error(`Request failed with status ${response.status}`);
         }
 
-        console.log(`Request to ${url} successful, parsing JSON`);
+        logger.info(`Request to ${url} successful, parsing JSON`);
         return response.json();
     }
 
@@ -85,7 +86,7 @@ export class CanvasClient {
         const result: T[] = [];
 
         let url = this.makeUrl(path);
-        console.log(`Making initial request to ${url}`);
+        logger.info(`Making initial request to ${url}`);
         const response = await fetch(`${CanvasClient.BASE_URL}${path}`, {
             ...options,
             headers: {
@@ -100,7 +101,7 @@ export class CanvasClient {
 
         const linkHeader = response.headers.get("Link");
         if (!linkHeader) {
-            console.error(`Link header not found in response from ${url}`);
+            logger.error(`Link header not found in response from ${url}`);
             throw new Error(
                 "Link header not found. This method should only be used for paginated requests."
             );
@@ -109,19 +110,19 @@ export class CanvasClient {
         const links = parseLinkHeaders(linkHeader);
         const first = new URL(links.first);
         if (!first) {
-            console.error(`First link not found in response from ${url}`);
+            logger.error(`First link not found in response from ${url}`);
             throw new Error(
                 "First link not found. This method should only be used for paginated requests."
             );
         }
 
-        console.log(
+        logger.info(
             `Request to ${url} completed. Starting pagination to first: ${first}`
         );
         url = first;
         let pageNumber = 1;
         while (url) {
-            console.log(
+            logger.info(
                 `Making paginated request to page ${[pageNumber]}: ${url}`
             );
             const response = await fetch(url, {
@@ -133,7 +134,7 @@ export class CanvasClient {
             });
 
             if (!response.ok) {
-                console.error(
+                logger.error(
                     `Paginated request to ${url} failed with status ${response.status}`
                 );
                 throw new Error(
@@ -142,27 +143,27 @@ export class CanvasClient {
             }
 
             const data = await response.json();
-            console.log(
+            logger.info(
                 `Paginated request to ${url} successful. Adding ${data.length} data from page ${pageNumber} to result`
             );
             result.push(...data);
 
             const linkHeader = response.headers.get("Link");
             if (!linkHeader) {
-                console.error(`Link header not found in response from ${url}`);
+                logger.error(`Link header not found in response from ${url}`);
                 throw new Error("Link header not found.");
             }
 
             const links = parseLinkHeaders(linkHeader);
             if (!links.next) {
-                console.log(
+                logger.info(
                     `No next link found in response from ${url}, stopping pagination`
                 );
                 return result;
             }
 
             const next = new URL(links.next);
-            console.log(`Next link found in response from ${url}: ${next}`);
+            logger.info(`Next link found in response from ${url}: ${next}`);
             url = next;
             pageNumber += 1;
         }

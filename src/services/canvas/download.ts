@@ -1,3 +1,4 @@
+import { logger } from "@/log";
 import {
     CanvasClient,
     ForbiddenCanvasClientError,
@@ -22,7 +23,7 @@ async function downloadFile(
     initialFilepath: string,
     retryLimit = 10
 ) {
-    console.log(`Downloading ${url} to ${initialFilepath}`);
+    logger.info(`Downloading ${url} to ${initialFilepath}`);
     const res = await fetch(url);
     // We don't use `Bun.write` here because Bun APIs don't work properly
     // in Vitest at the moment.
@@ -35,7 +36,7 @@ async function downloadFile(
             await writeFile(filepath, Buffer.from(arrayBuffer), {
                 flag: "wx",
             });
-            console.log(`Successfully downloaded ${url} to ${filepath}`);
+            logger.info(`Successfully downloaded ${url} to ${filepath}`);
             return;
         } catch (err) {
             const error = err as { code?: string };
@@ -43,7 +44,7 @@ async function downloadFile(
                 throw err;
             }
 
-            console.log(`File already exists at ${filepath}, skipping...`);
+            logger.info(`File already exists at ${filepath}, skipping...`);
             count += 1;
             filepath = `${initialFilepath}_v${count}`;
         }
@@ -62,13 +63,13 @@ const METADATA_FILENAME = "metadata.json";
 
 /**
  * Reads the metadata file from the root folder.
- * 
+ *
  * @param rootFolder the root folder to read the metadata file from
  * @returns the metadata file as a record of file id (number) to file
  */
 async function readMetadataFile(rootFolder: string) {
     let existingFiles: z.infer<typeof metadataSchema> = {};
-    console.log(`Attempting to read metadata from root folder ${rootFolder}`);
+    logger.info(`Attempting to read metadata from root folder ${rootFolder}`);
     try {
         const metadataString = await readFile(
             path.join(rootFolder, METADATA_FILENAME),
@@ -79,12 +80,11 @@ async function readMetadataFile(rootFolder: string) {
     } catch (err) {
         const error = err as { code?: string };
         if (error?.code === "ENOENT") {
-            console.log(`${METADATA_FILENAME} file not found, defaulting to {}...`);
-        } else {
-            console.error(
-                "Error in reading metadata, defaulting to {}...",
-                err
+            logger.info(
+                `${METADATA_FILENAME} file not found, defaulting to {}...`
             );
+        } else {
+            logger.error("Error in reading metadata, defaulting to {}...", err);
         }
     }
     return existingFiles;
@@ -103,36 +103,37 @@ export async function downloadFilesForCourse(
     basePath: string,
     client: CanvasClient
 ): Promise<void> {
-    console.log("Downloading files for course", course.name);
+    logger.info("Downloading files for course", course.name);
     try {
         const folders = await client.getFoldersForCourse(course.id);
         const rootFolder = path.join(basePath, course.course_code);
         const existingFiles = await readMetadataFile(rootFolder);
 
+        let count = 0;
         for (const folder of folders) {
             const directory = generateFolderPath(folder, rootFolder);
 
-            console.log(
+            logger.info(
                 `Creating directory ${directory} if it doesn't exist...`
             );
             await mkdir(directory, { recursive: true });
 
-            console.log(`Retrieving file information for ${directory}`);
+            logger.info(`Retrieving file information for ${directory}`);
             const files = await client.getFilesForFolder(folder.id);
             const newFiles = files.filter(
                 (file) =>
                     !existingFiles[file.id] ||
                     file.updated_at > existingFiles[file.id].updated_at
             );
-            console.log(`${newFiles.length} out of ${files.length} are new`);
-            console.log(
+            logger.info(`${newFiles.length} out of ${files.length} are new`);
+            logger.info(
                 `Downloading ${newFiles.length} files for ${directory}`
             );
 
             // Download sequentially as there are some non-terminating requests
             // when downloading files concurrently. E.g. CS1231S
             for (const file of newFiles) {
-                console.log(
+                logger.info(
                     `Downloading ${file.url} to ${path.join(
                         directory,
                         file.display_name
@@ -143,16 +144,17 @@ export async function downloadFilesForCourse(
                     path.join(directory, file.display_name)
                 );
                 existingFiles[file.id] = file;
-                console.log(
+                logger.info(
                     `Successfully downloaded ${file.url} to ${path.join(
                         directory,
                         file.display_name
                     )}`
                 );
             }
-            console.log(
+            logger.info(
                 `Finished downloading ${newFiles.length} files for ${directory}`
             );
+            count += newFiles.length;
         }
 
         await writeFile(
@@ -160,10 +162,13 @@ export async function downloadFilesForCourse(
             JSON.stringify(existingFiles, null, 2)
         );
 
-        console.log("Finished downloading all files for course", course.name);
+        logger.info("Finished downloading all files for course", course.name);
+        // console.log(
+        //     `Downloaded \x1b[32m${count} files\x1b[0m for ${course.course_code}.`
+        // );
     } catch (error) {
         if (error instanceof ForbiddenCanvasClientError) {
-            console.error(
+            logger.error(
                 "Failed to download files for course",
                 course.name,
                 "due to insufficient permissions"
