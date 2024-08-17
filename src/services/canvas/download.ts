@@ -4,14 +4,16 @@ import {
 } from "@/services/canvas/client";
 import { CanvasCourse } from "@/services/canvas/schema";
 import { generateFolderPath } from "@/services/canvas/utils";
-import { write } from "bun";
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 async function downloadFile(url: string, filepath: string) {
     console.log(`Downloading ${url} to ${filepath}`);
     const res = await fetch(url);
-    await write(filepath, res);
+    // We don't use `Bun.write` here because Bun APIs don't work properly
+    // in Vitest at the moment.
+    const arrayBuffer = await res.arrayBuffer();
+    await writeFile(filepath, Buffer.from(arrayBuffer));
     console.log(`Successfully downloaded ${url} to ${filepath}`);
 }
 
