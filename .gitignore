@@ -1,4 +1,4 @@
 # deps
 node_modules/
 .env
-src/scripts/files
+**/src/scripts/files
