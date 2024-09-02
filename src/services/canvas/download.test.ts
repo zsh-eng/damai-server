@@ -5,10 +5,11 @@ import {
     CanvasFile,
     CanvasFolder,
 } from "@/services/canvas/schema";
+import path from "node:path";
 import { vol } from "memfs";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import fs, { access, readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import {
     afterAll,
     afterEach,
@@ -272,6 +273,7 @@ describe("downloadFilesForCourse", () => {
     });
 
     it("should download files", async () => {
+        console.log(vol.toJSON());
         mockedFiles.mockImplementationOnce(async (id) => {
             if (testFolders[0].id === id) {
                 return files1;
@@ -284,6 +286,7 @@ describe("downloadFilesForCourse", () => {
         ).resolves.toBe(undefined);
 
         for (const file of files1) {
+            console.log(file.display_name);
             await expect(
                 readFile(
                     `/tmp/NST2055/Course Notes/${file.display_name}`,
@@ -407,6 +410,7 @@ describe("downloadFilesForCourse", () => {
             await expect(
                 downloadFilesForCourse(mockCourse, "/tmp", mockClient)
             ).resolves.toBe(undefined);
+
             expect(spy).toHaveBeenCalledTimes(1);
             const newMetadata = JSON.parse(
                 await readFile("/tmp/NST2055/metadata.json", "utf-8")
@@ -418,19 +422,25 @@ describe("downloadFilesForCourse", () => {
                 files1[0].updated_at
             );
 
-            const firstFileNewPath = firstFilePath + "_v2";
-            expect(await readFile(firstFileNewPath, "utf-8")).toBe(
-                `This is the content of ${firstFile.display_name}`
-            );
+            expect(
+                await readFile(
+                    "/tmp/NST2055/Course Notes/NST2055 Chapter 0 - Course Information_v3.pdf",
+                    "utf-8"
+                )
+            ).toBe(`This is the content of ${firstFile.display_name}`);
         });
+
+        it("should strip away version 1 in the filename");
 
         it("should throw error if hit retry limit", async () => {
             const limit = 10;
+            const baseFilename =  "NST2055 Chapter 0 - Course Information"
+
             const fileNames = Array.from({ length: limit }, (_, i) => {
                 if (i === 0) {
-                    return files1[0].display_name;
+                    return `${baseFilename}.pdf`;
                 }
-                return `${files1[0].display_name}_v${i + 1}`;
+                return `${baseFilename}_v${i+1}.pdf`;
             });
             const volJson = Object.fromEntries(
                 fileNames.map((name) => [`./NST2055/Course Notes/${name}`, ""])

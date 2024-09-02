@@ -4,7 +4,10 @@ import {
     ForbiddenCanvasClientError,
 } from "@/services/canvas/client";
 import { CanvasCourse, fileSchema } from "@/services/canvas/schema";
-import { generateFolderPath } from "@/services/canvas/utils";
+import {
+    generateFolderPath,
+    stripVersionFromFilename,
+} from "@/services/canvas/utils";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -13,6 +16,8 @@ import { z } from "zod";
  * Downloads a file from a given URL to the file system.
  * If the file already exists, it will append a version number to the filename
  * up till the retry limit.
+ *
+ * Note: we assume a hard cap of 10 versions for a file.
  *
  * @param url
  * @param initialFilepath
@@ -28,10 +33,20 @@ async function downloadFile(
     // We don't use `Bun.write` here because Bun APIs don't work properly
     // in Vitest at the moment.
     const arrayBuffer = await res.arrayBuffer();
-    let filepath = initialFilepath;
-    let count = 1;
+
+    const extension = path.extname(initialFilepath);
+    const directory = path.dirname(initialFilepath);
+    const filename = path
+        .basename(initialFilepath, extension)
+        .replace(/_v\d+$/, "");
+
+    let version = 1;
 
     for (let i = 0; i < retryLimit; i++) {
+        const filepath =
+            version > 1
+                ? path.join(directory, `${filename}_v${version}${extension}`)
+                : initialFilepath;
         try {
             await writeFile(filepath, Buffer.from(arrayBuffer), {
                 flag: "wx",
@@ -44,14 +59,15 @@ async function downloadFile(
                 throw err;
             }
 
-            logger.info(`File already exists at ${filepath}, skipping...`);
-            count += 1;
-            filepath = `${initialFilepath}_v${count}`;
+            logger.info(
+                `File already exists at ${filepath}, trying next version number`
+            );
+            version += 1;
         }
     }
 
     throw new Error(
-        `Failed to write file after ${retryLimit} retries. Final filename: ${filepath}`
+        `Failed to write file after ${retryLimit} retries. Final version for ${initialFilepath}: ${version}`
     );
 }
 
