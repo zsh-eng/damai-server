@@ -80,7 +80,7 @@ async function listCourses(client: CanvasClient) {
 program
     .name("canvas-sync")
     .description("Sync files from NUS Canvas to your local file system")
-    .version("0.1.1");
+    .version("0.1.2");
 
 program
     .command("sync")
