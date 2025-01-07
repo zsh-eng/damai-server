@@ -20,19 +20,27 @@ const FORBIDDEN_STATUS = 403;
 /**
  * A client for accessing the Canvas API.
  */
-export class CanvasClient {
-    static readonly BASE_URL = "https://canvas.nus.edu.sg/api/v1";
-    private readonly token: string;
+const NUS_BASE_URL = "https://canvas.nus.edu.sg/api/v1";
+const UNC_BASE_URL = "https://uncch.instructure.com/api/v1";
 
-    constructor(token: string) {
+export class CanvasClient {
+    static readonly DEFAULT_BASE_URL = UNC_BASE_URL;
+    private readonly token: string;
+    private readonly baseUrl: string;
+
+    constructor(
+        token: string,
+        baseUrl: string = CanvasClient.DEFAULT_BASE_URL
+    ) {
         if (!token) {
             throw new Error("Token is required to create a CanvasClient");
         }
         this.token = token;
+        this.baseUrl = baseUrl;
     }
 
     private makeUrl(path: string): URL {
-        const url = new URL(CanvasClient.BASE_URL);
+        const url = new URL(this.baseUrl);
         url.pathname += path;
         return url;
     }
@@ -87,7 +95,7 @@ export class CanvasClient {
 
         let url = this.makeUrl(path);
         logger.info(`Making initial request to ${url}`);
-        const response = await fetch(`${CanvasClient.BASE_URL}${path}`, {
+        const response = await fetch(url, {
             ...options,
             headers: {
                 Authorization: `Bearer ${this.token}`,
