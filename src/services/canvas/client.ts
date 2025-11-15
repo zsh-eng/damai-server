@@ -24,7 +24,7 @@ const NUS_BASE_URL = "https://canvas.nus.edu.sg/api/v1";
 const UNC_BASE_URL = "https://uncch.instructure.com/api/v1";
 
 export class CanvasClient {
-    static readonly DEFAULT_BASE_URL = UNC_BASE_URL;
+    static readonly DEFAULT_BASE_URL = NUS_BASE_URL;
     private readonly token: string;
     private readonly baseUrl: string;
 

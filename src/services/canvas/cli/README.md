@@ -6,6 +6,15 @@ to download files from a course.
 
 Inspired by [Lominus](https://github.com/Beebeeoii/lominus).
 
+## Development
+
+Navigate to the `/cli` directory and run:
+
+```bash
+bun run build
+bun link
+```
+
 ## Usage
 
 ```bash
